@@ -73,6 +73,7 @@ libzmq_la_SOURCES = \
     socket_base.hpp \
     stdint.hpp \
     stream.hpp \
+    stream_connecter.hpp \
     stream_engine.hpp \
     sub.hpp \
     tcp.hpp \
@@ -137,6 +138,7 @@ libzmq_la_SOURCES = \
     signaler.cpp \
     socket_base.cpp \
     stream.cpp \
+    stream_connecter.cpp \
     stream_engine.cpp \
     sub.cpp \
     tcp.cpp \
