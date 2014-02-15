@@ -22,6 +22,7 @@
 #include "err.hpp"
 #include "pipe.hpp"
 #include "likely.hpp"
+#include "stream_connecter.hpp"
 #include "tcp_connecter.hpp"
 #include "ipc_connecter.hpp"
 #include "tipc_connecter.hpp"
@@ -79,7 +80,8 @@ zmq::session_base_t::session_base_t (class io_thread_t *io_thread_,
     socket (socket_),
     io_thread (io_thread_),
     has_linger_timer (false),
-    addr (addr_)
+    addr (addr_),
+    current_reconnect_ivl (0)
 {
 }
 
@@ -276,7 +278,7 @@ zmq::socket_base_t *zmq::session_base_t::get_socket ()
 void zmq::session_base_t::process_plug ()
 {
     if (active)
-        start_connecting (false);
+        start_connecting ();
 }
 
 int zmq::session_base_t::zap_connect ()
@@ -461,7 +463,7 @@ void zmq::session_base_t::reconnect ()
 
     //  Reconnect.
     if (options.reconnect_ivl != -1)
-        start_connecting (true);
+        start_connecting ();
 
     //  For subscriber sockets we hiccup the inbound pipe, which will cause
     //  the socket object to resend all the subscriptions.
@@ -469,9 +471,12 @@ void zmq::session_base_t::reconnect ()
         pipe->hiccup ();
 }
 
-void zmq::session_base_t::start_connecting (bool wait_)
+void zmq::session_base_t::start_connecting ()
 {
     zmq_assert (active);
+
+    int reconnect_ivl = zmq::stream_connecter_t::calc_new_reconnect_ivl(
+        current_reconnect_ivl, options.reconnect_ivl, options.reconnect_ivl_max);
 
     //  Choose I/O thread to run connecter in. Given that we are already
     //  running in an I/O thread, there must be at least one available.
@@ -482,7 +487,7 @@ void zmq::session_base_t::start_connecting (bool wait_)
 
     if (addr->protocol == "tcp") {
         tcp_connecter_t *connecter = new (std::nothrow) tcp_connecter_t (
-            io_thread, this, options, addr, wait_);
+            io_thread, this, options, addr, reconnect_ivl);
         alloc_assert (connecter);
         launch_child (connecter);
         return;
@@ -491,7 +496,7 @@ void zmq::session_base_t::start_connecting (bool wait_)
 #if !defined ZMQ_HAVE_WINDOWS && !defined ZMQ_HAVE_OPENVMS
     if (addr->protocol == "ipc") {
         ipc_connecter_t *connecter = new (std::nothrow) ipc_connecter_t (
-            io_thread, this, options, addr, wait_);
+            io_thread, this, options, addr, reconnect_ivl);
         alloc_assert (connecter);
         launch_child (connecter);
         return;
@@ -500,7 +505,7 @@ void zmq::session_base_t::start_connecting (bool wait_)
 #if defined ZMQ_HAVE_TIPC
     if (addr->protocol == "tipc") {
         tipc_connecter_t *connecter = new (std::nothrow) tipc_connecter_t (
-            io_thread, this, options, addr, wait_);
+            io_thread, this, options, addr, reconnect_ivl);
         alloc_assert (connecter);
         launch_child (connecter);
         return;

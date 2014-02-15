@@ -95,7 +95,7 @@ namespace zmq
 
     private:
 
-        void start_connecting (bool wait_);
+        void start_connecting ();
 
         void reconnect ();
 
@@ -153,6 +153,9 @@ namespace zmq
 
         //  Protocol and address to use when connecting.
         const address_t *addr;
+
+        //  Current reconnect ivl, updated for backoff strategy
+        int current_reconnect_ivl;
 
         session_base_t (const session_base_t&);
         const session_base_t &operator = (const session_base_t&);

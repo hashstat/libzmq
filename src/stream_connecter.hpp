@@ -37,13 +37,17 @@ namespace zmq
     {
     public:
 
-        //  If 'delayed_start' is true connecter first waits for a while,
-        //  then starts connection process.
+        //  If 'reconnect_ivl' is not zero, wait before connecting.
         stream_connecter_t (const char *protocol_name_,
             zmq::io_thread_t *io_thread_, zmq::session_base_t *session_,
             const options_t &options_, const address_t *addr_,
-            bool delayed_start_);
+            int reconnect_ivl_);
         ~stream_connecter_t ();
+
+        //  Will modify the current_ivl used for next call.
+        //  Returns the currently used interval.
+        static int calc_new_reconnect_ivl (
+            int &current_ivl, int base_ivl, int max_ivl);
 
     protected:
 
@@ -80,11 +84,6 @@ namespace zmq
         //  Internal function to add a reconnect timer
         void add_reconnect_timer();
 
-        //  Internal function to return a reconnect backoff delay.
-        //  Will modify the current_reconnect_ivl used for next call
-        //  Returns the currently used interval
-        int get_new_reconnect_ivl ();
-
         //  Open connecting socket. Returns -1 in case of error,
         //  0 if connect was successfull immediately. Returns -1 with
         //  EAGAIN errno if async connect was launched.
@@ -103,9 +102,6 @@ namespace zmq
         //  If true file descriptor is registered with the poller and 'handle'
         //  contains valid value.
         bool handle_valid;
-
-        //  If true, connecter is waiting a while before trying to connect.
-        const bool delayed_start;
 
         //  True iff a timer has been started.
         bool timer_started;

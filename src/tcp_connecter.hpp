@@ -30,9 +30,9 @@ namespace zmq
     public:
         tcp_connecter_t (zmq::io_thread_t *io_thread_,
             zmq::session_base_t *session_, const options_t &options_,
-            const address_t *addr_, bool delayed_start_) :
-            stream_connecter_t ("tcp", io_thread_, session_, options_,
-                    addr_, delayed_start_) {}
+            const address_t *addr_, int reconnect_ivl_) :
+                stream_connecter_t ("tcp", io_thread_, session_,
+                        options_, addr_, reconnect_ivl_) {}
 
     private:
         void tune (fd_t fd_);

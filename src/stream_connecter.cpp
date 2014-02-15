@@ -37,16 +37,15 @@
 
 zmq::stream_connecter_t::stream_connecter_t (const char *protocol_name_,
       class io_thread_t *io_thread_, class session_base_t *session_,
-      const options_t &options_, const address_t *addr_, bool delayed_start_) :
+      const options_t &options_, const address_t *addr_, int reconnect_ivl_) :
     own_t (io_thread_, options_),
     io_object_t (io_thread_),
     addr (addr_),
     s (retired_fd),
     handle_valid (false),
-    delayed_start (delayed_start_),
     timer_started (false),
     session (session_),
-    current_reconnect_ivl(options.reconnect_ivl)
+    current_reconnect_ivl(reconnect_ivl_)
 {
     zmq_assert (addr);
     zmq_assert (addr->protocol == protocol_name_);
@@ -63,7 +62,7 @@ zmq::stream_connecter_t::~stream_connecter_t ()
 
 void zmq::stream_connecter_t::process_plug ()
 {
-    if (delayed_start)
+    if (current_reconnect_ivl)
         add_reconnect_timer ();
     else
         start_connecting ();
@@ -166,33 +165,36 @@ void zmq::stream_connecter_t::start_connecting ()
 
 void zmq::stream_connecter_t::add_reconnect_timer()
 {
-    int rc_ivl = get_new_reconnect_ivl ();
+    int rc_ivl = calc_new_reconnect_ivl(current_reconnect_ivl,
+        options.reconnect_ivl, options.reconnect_ivl_max);
     add_timer (rc_ivl, reconnect_timer_id);
     socket->event_connect_retried (endpoint, rc_ivl);
     timer_started = true;
 }
 
-int zmq::stream_connecter_t::get_new_reconnect_ivl ()
+int zmq::stream_connecter_t::calc_new_reconnect_ivl (
+    int &current_ivl, int base_ivl, int max_ivl)
 {
     //  Prevent update and division by zero error.
-    if (options.reconnect_ivl == 0)
+    if (base_ivl == 0)
         return 0;
 
+    //  Set the current interval if it wasn't yet set.
+    if (current_ivl == 0)
+        current_ivl = base_ivl;
+
     //  The new interval is the current interval + random value.
-    int this_interval = current_reconnect_ivl +
-        (generate_random () % options.reconnect_ivl);
+    int this_interval = current_ivl + (generate_random () % base_ivl);
 
-    //  Only change the current reconnect interval  if the maximum reconnect
+    //  Only change the current reconnect interval if the maximum reconnect
     //  interval was set and if it's larger than the reconnect interval.
-    if (options.reconnect_ivl_max > 0 && 
-        options.reconnect_ivl_max > options.reconnect_ivl) {
-
+    if (max_ivl > 0 && max_ivl > base_ivl) {
         //  Calculate the next interval
-        current_reconnect_ivl = current_reconnect_ivl * 2;
-        if(current_reconnect_ivl >= options.reconnect_ivl_max) {
-            current_reconnect_ivl = options.reconnect_ivl_max;
-        }   
+        current_ivl *= 2;
+        if (current_ivl > max_ivl)
+            current_ivl = max_ivl;
     }
+
     return this_interval;
 }
 
